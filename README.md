@@ -15,7 +15,6 @@ This is the backend API for the Alexandria Shipyard Document Management System, 
 
 - Python 3.10+
 - PostgreSQL 13+
-- Node.js 18+ (for frontend)
 
 ## Setup
 
