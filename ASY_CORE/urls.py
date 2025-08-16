@@ -50,6 +50,9 @@ urlpatterns = [
     
     # Documents app endpoints
     path('api/documents/', include('documents.api.urls')),
+    
+    # Lookups app endpoints
+    path('api/lookups/', include('lookups.api.urls')),
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
