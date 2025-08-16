@@ -69,21 +69,43 @@ class DocumentViewSet(viewsets.GenericViewSet):
             serializer = self.get_serializer_class()(page, many=True)
             return self.get_paginated_response(serializer.data)
             
+        # If pagination is disabled, still return in standard format
         serializer = self.get_serializer_class()(queryset, many=True)
-        return Response(serializer.data)
+        return Response({
+            'count': queryset.count(),
+            'next': None,
+            'previous': None,
+            'results': serializer.data
+        })
     
     def create(self, request):
         serializer = DocumentCreateSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(uploaded_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            document = serializer.save(uploaded_by=request.user)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     def retrieve(self, request, pk=None):
         queryset = self.get_queryset()
         document = get_object_or_404(queryset, pk=pk)
         serializer = DocumentSerializer(document)
-        return Response(serializer.data)
+        return Response({
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [serializer.data]
+        })
     
     def update(self, request, pk=None):
         queryset = self.get_queryset()
@@ -91,8 +113,19 @@ class DocumentViewSet(viewsets.GenericViewSet):
         serializer = DocumentUpdateSerializer(document, data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            })
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     def partial_update(self, request, pk=None):
         queryset = self.get_queryset()
@@ -100,14 +133,32 @@ class DocumentViewSet(viewsets.GenericViewSet):
         serializer = DocumentUpdateSerializer(document, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            })
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     def destroy(self, request, pk=None):
         queryset = self.get_queryset()
         document = get_object_or_404(queryset, pk=pk)
+        document_id = document.id
         document.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'message': f'Document with ID {document_id} was successfully deleted'
+        }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def change_status(self, request, pk=None):
@@ -116,10 +167,13 @@ class DocumentViewSet(viewsets.GenericViewSet):
         new_status = request.data.get('status')
         
         if not new_status:
-            return Response(
-                {'status': 'Status is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': [],
+                'errors': {'status': 'Status is required'}
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         document.status = new_status
         
@@ -129,7 +183,12 @@ class DocumentViewSet(viewsets.GenericViewSet):
         
         document.save()
         serializer = self.get_serializer_class()(document)
-        return Response(serializer.data)
+        return Response({
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [serializer.data]
+        })
         
     def get_serializer(self, *args, **kwargs):
         serializer_class = self.get_serializer_class()

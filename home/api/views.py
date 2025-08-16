@@ -26,18 +26,15 @@ class DocumentStatsViewSet(viewsets.ViewSet):
                 Q(status='pending')
             )
         
-        # Get counts by status
-        status_counts = queryset.values('status').annotate(count=Count('id'))
-        
-        # Get counts by priority
-        priority_counts = queryset.values('priority').annotate(count=Count('id'))
-        
-        # Get counts by department
-        department_counts = queryset.values('department').annotate(count=Count('id'))
+        stats_data = {
+            'total_documents': queryset.count(),
+            'total_signed': queryset.filter(status='signed').count(),
+            'total_pending': queryset.filter(status='pending').count(),
+        }
         
         return Response({
-            'total_documents': queryset.count(),
-            'by_status': {item['status']: item['count'] for item in status_counts},
-            'by_priority': {item['priority']: item['count'] for item in priority_counts},
-            'by_department': {item['department']: item['count'] for item in department_counts},
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [stats_data]
         })

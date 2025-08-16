@@ -35,6 +35,86 @@ class UserViewSet(viewsets.ModelViewSet):
         if user.is_superuser or user.role == "ceo":
             return User.objects.all()
         return User.objects.filter(pk=user.pk)
+        
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'count': queryset.count(),
+            'next': None,
+            'previous': None,
+            'results': serializer.data
+        })
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response({
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [serializer.data]
+        })
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            self.perform_update(serializer)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            })
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance_id = instance.id
+        self.perform_destroy(instance)
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'message': f'User with id {instance_id} was deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
 
 
 # class LoginView(viewsets.GenericViewSet):
@@ -86,17 +166,24 @@ class LogoutView(APIView):
             logout(request)
 
             # Create a response and delete cookies
-            response = Response(
-                {"detail": "Successfully logged out."}, status=status.HTTP_200_OK
-            )
+            response = Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [{"message": "Successfully logged out."}]
+            }, status=status.HTTP_200_OK)
             response.delete_cookie("sessionid")
             response.delete_cookie("csrftoken")
 
             return response
         except Exception as e:
-            return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': [],
+                'errors': {"detail": str(e)}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ProfileView(viewsets.GenericViewSet):
@@ -107,11 +194,20 @@ class ProfileView(viewsets.GenericViewSet):
     def list(self, request):
         try:
             serializer = UserSerializer(request.user)
-            return Response(serializer.data)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            })
         except Exception as e:
-            return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': [],
+                'errors': {'detail': str(e)}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, pk=None):
         user = request.user
@@ -120,15 +216,29 @@ class ProfileView(viewsets.GenericViewSet):
         if serializer.is_valid():
             # Don't allow changing password through this endpoint
             if "password" in request.data:
-                return Response(
-                    {"password": "Use the change password endpoint to update password"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({
+                    'count': 0,
+                    'next': None,
+                    'previous': None,
+                    'results': [],
+                    'errors': {"password": "Use the change password endpoint to update password"}
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             serializer.save()
-            return Response(serializer.data)
+            return Response({
+                'count': 1,
+                'next': None,
+                'previous': None,
+                'results': [serializer.data]
+            })
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ChangePasswordView(APIView):
@@ -140,15 +250,22 @@ class ChangePasswordView(APIView):
         new_password = request.data.get("new_password")
 
         if not old_password or not new_password:
-            return Response(
-                {"error": "Both old and new password are required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': [],
+                'errors': {"error": "Both old and new password are required"}
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         if not user.check_password(old_password):
-            return Response(
-                {"error": "Incorrect old password"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': [],
+                'errors': {"error": "Incorrect old password"}
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(new_password)
         user.save()
@@ -156,4 +273,9 @@ class ChangePasswordView(APIView):
         # Delete existing tokens to force re-login
         Token.objects.filter(user=user).delete()
 
-        return Response({"success": "Password updated successfully"})
+        return Response({
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [{"message": "Password updated successfully"}]
+        })
