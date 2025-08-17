@@ -100,53 +100,56 @@ class SignatureAgent:
             return text
     
     def _add_signature_to_pdf(self, pdf_bytes):
-        """Add signature and comments to a PDF document."""
+        """Add signature and comments to a PDF document while preserving original page size and orientation."""
         try:
-            # A4 dimensions in points (72 DPI)
-            A4_WIDTH = 595
-            A4_HEIGHT = 842
+            # Open the original PDF to detect page sizes and orientations
+            original_pdf = PdfReader(BytesIO(pdf_bytes))
+            page_sizes = []
+            page_orientations = []
+            
+            # Detect page sizes and orientations for all pages
+            for page in original_pdf.pages:
+                # Get page dimensions in points (72 DPI)
+                media_box = page.mediabox
+                width = float(media_box.width)
+                height = float(media_box.height)
+                
+                # Store original dimensions
+                page_sizes.append((width, height))
+                
+                # Determine orientation (width > height = landscape, otherwise portrait)
+                orientation = "landscape" if width > height else "portrait"
+                page_orientations.append(orientation)
+                
+            # Get first page dimensions
+            first_page_width, first_page_height = page_sizes[0]
+            first_page_orientation = page_orientations[0]
             
             # Convert first page to image with fixed DPI for consistent sizing
             images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
             if not images:
                 raise ValueError("Failed to convert PDF to image")
                 
-            first_page = images[0]
+            first_page_img = images[0]
             
-            # Calculate A4 dimensions in pixels at 150 DPI
-            a4_width_px = int(A4_WIDTH * 150 / 72)  # ~1240px
-            a4_height_px = int(A4_HEIGHT * 150 / 72)  # ~1754px
+            # Calculate dimensions in pixels at 150 DPI
+            width_px = int(first_page_width * 150 / 72)
+            height_px = int(first_page_height * 150 / 72)
             
-            # Resize the image to A4 proportions if needed
-            if first_page.size != (a4_width_px, a4_height_px):
-                # Calculate scaling to fit A4 while maintaining aspect ratio
-                scale_x = a4_width_px / first_page.width
-                scale_y = a4_height_px / first_page.height
-                scale = min(scale_x, scale_y)  # Use smaller scale to fit within A4
-                
-                new_width = int(first_page.width * scale)
-                new_height = int(first_page.height * scale)
-                
-                # Resize the image
-                first_page = first_page.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                # Create A4-sized canvas and paste the resized image
-                a4_canvas = Image.new('RGB', (a4_width_px, a4_height_px), 'white')
-                # Center the image on the canvas
-                x_offset = (a4_width_px - new_width) // 2
-                y_offset = (a4_height_px - new_height) // 2
-                a4_canvas.paste(first_page, (x_offset, y_offset))
-                first_page = a4_canvas
+            # Ensure image matches original page dimensions
+            if first_page_img.size != (width_px, height_px):
+                # Resize the image to match original dimensions while maintaining aspect ratio
+                first_page_img = first_page_img.resize((width_px, height_px), Image.Resampling.LANCZOS)
             
             # Resize signature to fit the page
-            self._resize_signature(first_page.width)
+            self._resize_signature(first_page_img.width)
             
             # Create a drawing context
-            draw = ImageDraw.Draw(first_page)
+            draw = ImageDraw.Draw(first_page_img)
             
             # Calculate positions for signature and comments side by side at 50px from bottom
             bottom_margin = 50
-            base_y = first_page.height - bottom_margin
+            base_y = first_page_img.height - bottom_margin
             
             # Determine the layout based on what we have
             signature_width = self.signature_image.width if self.signature_image else 0
@@ -183,24 +186,31 @@ class SignatureAgent:
             spacing = 30  # Space between signature and comments
             total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
             
-            # Calculate starting x position to center both elements together
-            start_x = (first_page.width - total_width) // 2
+            # Default to bottom-right corner for signature positioning
+            # Calculate margin from right edge (50px)
+            right_margin = 50
             
             # Add signature
             if self.signature_image:
-                signature_x = start_x
+                # Position signature at bottom-right corner
+                signature_x = first_page_img.width - self.signature_image.width - right_margin
                 signature_y = base_y - self.signature_image.height
                 
+                # Ensure signature has transparency
+                if self.signature_image.mode != 'RGBA':
+                    self.signature_image = self.signature_image.convert('RGBA')
+                
                 # Paste signature with transparency
-                first_page.paste(
+                first_page_img.paste(
                     self.signature_image,
                     (signature_x, signature_y),
-                    self.signature_image
+                    self.signature_image  # Use the image itself as mask to preserve transparency
                 )
             
-            # Add comments beside signature
+            # Add comments to the left of signature
             if self.comments and comments_lines:
-                comments_x = start_x + signature_width + (spacing if signature_width > 0 else 0)
+                # Position comments to the left of the signature
+                comments_x = signature_x - comments_width - spacing if self.signature_image else first_page_img.width - comments_width - right_margin
                 comments_y = base_y - comments_height
                 
                 # Draw each line of comments (right-aligned)
@@ -214,27 +224,26 @@ class SignatureAgent:
                     draw.text((x_text, y_text), line, fill="black", font=font)
                     y_text += 25  # Move down for next line
             
-            # Convert back to PDF with proper A4 dimensions
+            # Convert back to PDF with original page dimensions
             from reportlab.pdfgen import canvas
-            from reportlab.lib.pagesizes import A4, letter
             from reportlab.lib.utils import ImageReader
             
-            # Create a temporary PDF with A4 size
+            # Create a temporary PDF with original page size
             temp_pdf = BytesIO()
-            c = canvas.Canvas(temp_pdf, pagesize=letter)
+            c = canvas.Canvas(temp_pdf, pagesize=(first_page_width, first_page_height))
             
             # Convert PIL Image to ImageReader for ReportLab
-            img_reader = ImageReader(first_page)
+            img_reader = ImageReader(first_page_img)
             
-            # Draw the image on A4 canvas
-            c.drawImage(img_reader, 0, 0, width=A4_WIDTH, height=A4_HEIGHT, preserveAspectRatio=True)
+            # Draw the image on canvas with original dimensions
+            c.drawImage(img_reader, 0, 0, width=first_page_width, height=first_page_height, preserveAspectRatio=True)
             c.save()
             
             # Merge with remaining pages
             original_pdf = PdfReader(BytesIO(pdf_bytes))
             output = PdfWriter()
             
-            # Add modified first page with A4 size
+            # Add modified first page with original size and orientation preserved
             temp_pdf.seek(0)
             modified_first_page = PdfReader(temp_pdf)
             output.add_page(modified_first_page.pages[0])
@@ -344,14 +353,12 @@ class SignatureAgent:
             
             # Create a ContentFile with the processed content
             file_like_obj = ContentFile(processed_content, name=f"signed_{document_file.name}")
-            document_sig = DocumentAttachment.objects.create(
-                document= self.document,
-                file = file_like_obj,
-                original_name="تم التوقيع",
-                is_signed=True
-
-            )
-            return document_sig
+            self.signature_model.attachment.file = file_like_obj
+            self.signature_model.attachment.save()
+            self.document.status = 'signed'
+            self.document.save()
+            
+            return True
             
         except Exception as e:
             raise Exception(f"Failed to process document: {str(e)}")

@@ -19,6 +19,7 @@ from .serializers import (
     SignatureCreateSerializer,
     SignatureSerializer,
 )
+from documents.services.sign_document import SignatureAgent
 
 class DocumentViewSet(viewsets.GenericViewSet):
     """
@@ -302,6 +303,8 @@ class SignatureViewSet(viewsets.ViewSet):
         serializer = SignatureCreateSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(signed_by=request.user)
+            sign_doc = SignatureAgent(serializer.instance)
+            sign_doc.process_document()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
