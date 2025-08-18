@@ -186,15 +186,15 @@ class SignatureAgent:
             spacing = 30  # Space between signature and comments
             total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
             
-            # Default to bottom-right corner for signature positioning
-            # Calculate margin from right edge (50px)
-            right_margin = 50
+            # Position signature at bottom center of the page
+            # Calculate vertical position (leave some margin from the bottom)
+            bottom_margin = 50
             
             # Add signature
             if self.signature_image:
-                # Position signature at bottom-right corner
-                signature_x = first_page_img.width - self.signature_image.width - right_margin
-                signature_y = base_y - self.signature_image.height
+                # Position signature at bottom center
+                signature_x = (first_page_img.width - self.signature_image.width) // 2  # Center horizontally
+                signature_y = base_y - self.signature_image.height - bottom_margin  # Add margin from bottom
                 
                 # Ensure signature has transparency
                 if self.signature_image.mode != 'RGBA':
@@ -354,6 +354,7 @@ class SignatureAgent:
             # Create a ContentFile with the processed content
             file_like_obj = ContentFile(processed_content, name=f"signed_{document_file.name}")
             self.signature_model.attachment.file = file_like_obj
+            self.signature_model.attachment.is_signed = True
             self.signature_model.attachment.save()
             self.document.status = 'signed'
             self.document.save()

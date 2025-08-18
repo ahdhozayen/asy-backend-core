@@ -7,7 +7,7 @@ router.register("user", views.UserViewSet, basename="user")
 
 urlpatterns = [
     path("", include(router.urls)),
-    # path("auth/login", views.LoginView.as_view({"post": "create"}), name="login"),
+    path("auth/login", views.LoginAPIView.as_view(), name="login"),
     path("auth/logout", views.LogoutView.as_view(), name="logout"),
     path(
         "auth/profile", views.ProfileView.as_view({"get": "list"}), name="get-profile"

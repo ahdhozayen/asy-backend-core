@@ -1,9 +1,22 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
 User = get_user_model()
 
+class LoginSerializer(TokenObtainPairSerializer):
+    default_error_messages = {"no_active_account": "Username or Password is incorrect."}
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        refresh = self.get_token(self.user)
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+        data["user"] = UserSerializer(self.user).data
+
+        return data
 
 class UserSerializer(serializers.ModelSerializer):
     """
