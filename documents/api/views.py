@@ -300,10 +300,15 @@ class SignatureViewSet(viewsets.ViewSet):
         return Response(serializer.data)
     
     def create(self, request):
-        serializer = SignatureCreateSerializer(data=request.data)
+        data = request.data
+        user_comments = data.pop("comments")
+        print(data)
+        serializer = SignatureCreateSerializer(data=data)
         if serializer.is_valid():
-            serializer.save(signed_by=request.user)
-            sign_doc = SignatureAgent(serializer.instance)
+            signature_obj = serializer.save(signed_by=request.user)
+            signature_obj.attachment.document.comments = user_comments
+            signature_obj.attachment.document.save()
+            sign_doc = SignatureAgent(signature_obj)
             sign_doc.process_document()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
