@@ -20,6 +20,7 @@ from .serializers import (
     SignatureSerializer,
 )
 from documents.services.sign_document import SignatureAgent
+from ASY_CORE.pagination import StandardResultsSetPagination
 
 class DocumentViewSet(viewsets.GenericViewSet):
     """
@@ -31,6 +32,7 @@ class DocumentViewSet(viewsets.GenericViewSet):
     search_fields = ['title', 'description', 'comments']
     ordering_fields = ['created_at', 'updated_at', 'priority']
     ordering = ['-created_at']
+    pagination_class = StandardResultsSetPagination
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -196,10 +198,14 @@ class DocumentViewSet(viewsets.GenericViewSet):
         return serializer_class(*args, **kwargs)
         
     def paginate_queryset(self, queryset):
-        if hasattr(self, '_paginator'):
-            if self.request.query_params.get('no_page', '').lower() != 'true':
-                return self._paginator.paginate_queryset(queryset, self.request, view=self)
-        return None
+        """Initialize paginator and paginate queryset"""
+        if not hasattr(self, '_paginator'):
+            self._paginator = self.pagination_class()
+            
+        if self.request.query_params.get('no_page', '').lower() == 'true':
+            return None
+            
+        return self._paginator.paginate_queryset(queryset, self.request, view=self)
         
     def get_paginated_response(self, data):
         assert hasattr(self, '_paginator')
