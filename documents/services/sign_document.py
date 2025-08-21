@@ -1,21 +1,14 @@
 import base64
-import io
-import os
 from io import BytesIO
 from pathlib import Path
 import arabic_reshaper
 from bidi.algorithm import get_display
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 from pdf2image import convert_from_bytes
-
-from documents.models import DocumentAttachment
 
 class SignatureAgent:
     """

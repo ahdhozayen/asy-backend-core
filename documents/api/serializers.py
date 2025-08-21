@@ -30,6 +30,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     uploaded_by = SignedBySerializer(read_only=True)
     reviewed_by = SignedBySerializer(read_only=True)
     attachments = DocumentAttachmentSerializer(many=True, read_only=True)
+    department_ar = serializers.CharField(source='department.name_ar')
+    department_en = serializers.CharField(source='department.name_en')
 
     class Meta:
         model = Document
@@ -38,7 +40,9 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class ListDocumentSerializer(serializers.ModelSerializer):
-
+    department_ar = serializers.CharField(source='department.name_ar')
+    department_en = serializers.CharField(source='department.name_en')
+    
     class Meta:
         model = Document
         fields = [
@@ -46,7 +50,8 @@ class ListDocumentSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "priority",
-            "department",
+            "department_ar",
+            "department_en",
             "status",
             "created_at",
         ]
@@ -55,7 +60,8 @@ class ListDocumentSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "priority",
-            "department",
+            "department_ar",
+            "department_en",
             "status",
             "created_at",
         ]

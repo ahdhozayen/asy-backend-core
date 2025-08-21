@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from lookups.models import Department
 
 User = get_user_model()
 
@@ -24,7 +25,7 @@ class Document(models.Model):
         choices=PRIORITY_CHOICES, 
         default='medium'
     )
-    department = models.CharField(max_length=100)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, default=1)
     status = models.CharField(
         max_length=10, 
         choices=STATUS_CHOICES, 
