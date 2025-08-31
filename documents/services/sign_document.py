@@ -140,8 +140,8 @@ class SignatureAgent:
             # Create a drawing context
             draw = ImageDraw.Draw(first_page_img)
             
-            # Calculate positions for signature and comments side by side at 50px from bottom
-            bottom_margin = 50
+            # Calculate positions for signature and comments side by side with proper bottom margin
+            bottom_margin = 80  # Increased margin from bottom
             base_y = first_page_img.height - bottom_margin
             
             # Determine the layout based on what we have
@@ -173,21 +173,18 @@ class SignatureAgent:
                     line_width = bbox[2] - bbox[0]
                     comments_width = max(comments_width, line_width)
                 
-                comments_height = len(comments_lines) * 25  # 20px per line
+                comments_height = len(comments_lines) * 25  # 25px per line
             
             # Calculate total width and spacing
-            spacing = 30  # Space between signature and comments
+            spacing = 40  # Space between signature and comments
             total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
             
-            # Position signature at bottom center of the page
-            # Calculate vertical position (leave some margin from the bottom)
-            bottom_margin = 50
-            
-            # Add signature
+            # Position signature and comments side by side at bottom center
             if self.signature_image:
-                # Position signature at bottom center
-                signature_x = (first_page_img.width - self.signature_image.width) // 2  # Center horizontally
-                signature_y = base_y - self.signature_image.height - bottom_margin  # Add margin from bottom
+                # Calculate starting position to center the combined signature + comments
+                start_x = (first_page_img.width - total_width) // 2
+                signature_x = start_x
+                signature_y = base_y - self.signature_image.height  # Align bottom of signature with base_y
                 
                 # Ensure signature has transparency
                 if self.signature_image.mode != 'RGBA':
@@ -200,21 +197,16 @@ class SignatureAgent:
                     self.signature_image  # Use the image itself as mask to preserve transparency
                 )
             
-            # Add comments to the left of signature
+            # Add comments to the right of signature
             if self.comments and comments_lines:
-                # Position comments to the left of the signature
-                comments_x = signature_x - comments_width - spacing if self.signature_image else first_page_img.width - comments_width - right_margin
-                comments_y = base_y - comments_height
+                # Position comments to the right of the signature
+                comments_x = signature_x + signature_width + spacing if self.signature_image else (first_page_img.width - comments_width) // 2
+                comments_y = base_y - comments_height  # Align bottom of comments with base_y
                 
-                # Draw each line of comments (right-aligned)
+                # Draw each line of comments
                 y_text = comments_y
                 for line in comments_lines:
-                    # Calculate line width for right alignment
-                    bbox = draw.textbbox((0, 0), line, font=font)
-                    line_width = bbox[2] - bbox[0]
-                    # Right-align by positioning at comments_x + comments_width - line_width
-                    x_text = comments_x + comments_width - line_width
-                    draw.text((x_text, y_text), line, fill="black", font=font)
+                    draw.text((comments_x, y_text), line, fill="black", font=font)
                     y_text += 25  # Move down for next line
             
             # Convert back to PDF with original page dimensions
@@ -265,21 +257,19 @@ class SignatureAgent:
             # Create a drawing context
             draw = ImageDraw.Draw(img)
             
-            # Add signature (bottom center)
-            signature_y = None
-            if self.signature_image:
-                x = (img.width - self.signature_image.width) // 2
-                y = img.height - self.signature_image.height - 80  # 80px from bottom to leave space for comments
-                signature_y = y + self.signature_image.height  # Bottom of signature
-                
-                # Paste signature with transparency
-                img.paste(
-                    self.signature_image,
-                    (x, y),
-                    self.signature_image
-                )
+            # Calculate positions for signature and comments side by side with proper bottom margin
+            bottom_margin = 100  # Increased margin from bottom for images
+            base_y = img.height - bottom_margin
             
-            # Add comments (below signature, centered)
+            # Determine the layout based on what we have
+            signature_width = self.signature_image.width if self.signature_image else 0
+            
+            # Prepare comments text and calculate dimensions
+            comments_lines = []
+            comments_width = 0
+            comments_height = 0
+            font = None
+            
             if self.comments:
                 try:
                     font = ImageFont.truetype("arial.ttf", 24)  # Larger font for images
@@ -288,20 +278,45 @@ class SignatureAgent:
                 
                 # Format Arabic text properly
                 formatted_comments = self._format_arabic_text(self.comments)
+                comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
                 
-                # Split comments into lines and add below signature
-                lines = formatted_comments.split('\n')
-                y_text = signature_y + 15 if signature_y else img.height - 60  # 15px below signature or 60px from bottom
+                # Calculate comments dimensions
+                for line in comments_lines:
+                    bbox = draw.textbbox((0, 0), line, font=font)
+                    line_width = bbox[2] - bbox[0]
+                    comments_width = max(comments_width, line_width)
                 
-                for line in lines:
-                    if line.strip():  # Only draw non-empty lines
-                        # Get text dimensions for centering
-                        bbox = draw.textbbox((0, 0), line, font=font)
-                        text_width = bbox[2] - bbox[0]
-                        x_text = (img.width - text_width) // 2  # Center horizontally
-                        
-                        draw.text((x_text, y_text), line, fill="black", font=font)
-                        y_text += 35  # More spacing for images
+                comments_height = len(comments_lines) * 35  # 35px per line for images
+            
+            # Calculate total width and spacing
+            spacing = 50  # Space between signature and comments
+            total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
+            
+            # Position signature and comments side by side at bottom center
+            if self.signature_image:
+                # Calculate starting position to center the combined signature + comments
+                start_x = (img.width - total_width) // 2
+                signature_x = start_x
+                signature_y = base_y - self.signature_image.height  # Align bottom of signature with base_y
+                
+                # Paste signature with transparency
+                img.paste(
+                    self.signature_image,
+                    (signature_x, signature_y),
+                    self.signature_image
+                )
+            
+            # Add comments to the right of signature
+            if self.comments and comments_lines:
+                # Position comments to the right of the signature
+                comments_x = signature_x + signature_width + spacing if self.signature_image else (img.width - comments_width) // 2
+                comments_y = base_y - comments_height  # Align bottom of comments with base_y
+                
+                # Draw each line of comments
+                y_text = comments_y
+                for line in comments_lines:
+                    draw.text((comments_x, y_text), line, fill="black", font=font)
+                    y_text += 35  # Move down for next line
             
             # Convert back to bytes
             output = BytesIO()
