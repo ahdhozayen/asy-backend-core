@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 import arabic_reshaper
 from bidi.algorithm import get_display
+from datetime import datetime
 
 from django.core.files.base import ContentFile
 from PIL import Image, ImageDraw, ImageFont
@@ -360,7 +361,9 @@ class SignatureAgent:
                 raise ValueError(f"Unsupported file format: {file_extension}")
             
             # Create a ContentFile with the processed content
-            file_like_obj = ContentFile(processed_content, name=f"signed_{document_file.name}")
+            timestamp = int(datetime.now().timestamp())
+            filename = f"signed_{timestamp}{file_extension}"
+            file_like_obj = ContentFile(processed_content, name=filename)
             self.signature_model.attachment.file = file_like_obj
             self.signature_model.attachment.is_signed = True
             self.signature_model.attachment.save()
