@@ -31,7 +31,7 @@ class SignatureAgent:
         self.signature_model = signature_model
         self.signature_image = None
         self.document = signature_model.attachment.document
-        self.comments = self.document.comments if hasattr(self.document, 'comments') else ""
+        # self.comments = self.document.comments if hasattr(self.document, 'comments') else ""
         
     def _decode_signature(self):
         """Decode the base64 signature into a PIL Image."""
@@ -153,27 +153,27 @@ class SignatureAgent:
             comments_height = 0
             font = None
             
-            if self.comments:
-                # Use bold font with 18pt size for better visibility
-                try:
-                    font = ImageFont.truetype("arialbd.ttf", 18)  # Arial Bold
-                except IOError:
-                    try:
-                        font = ImageFont.truetype("arial.ttf", 18)  # Fallback to regular Arial
-                    except IOError:
-                        font = ImageFont.load_default()
+            # if self.comments:
+            #     # Use bold font with 18pt size for better visibility
+            #     try:
+            #         font = ImageFont.truetype("arialbd.ttf", 18)  # Arial Bold
+            #     except IOError:
+            #         try:
+            #             font = ImageFont.truetype("arial.ttf", 18)  # Fallback to regular Arial
+            #         except IOError:
+            #             font = ImageFont.load_default()
                 
-                # Format Arabic text properly
-                formatted_comments = self._format_arabic_text(self.comments)
-                comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
+            #     # Format Arabic text properly
+            #     formatted_comments = self._format_arabic_text(self.comments)
+            #     comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
                 
-                # Calculate comments dimensions
-                for line in comments_lines:
-                    bbox = draw.textbbox((0, 0), line, font=font)
-                    line_width = bbox[2] - bbox[0]
-                    comments_width = max(comments_width, line_width)
+            #     # Calculate comments dimensions
+            #     for line in comments_lines:
+            #         bbox = draw.textbbox((0, 0), line, font=font)
+            #         line_width = bbox[2] - bbox[0]
+            #         comments_width = max(comments_width, line_width)
                 
-                comments_height = len(comments_lines) * 25  # 25px per line
+            #     comments_height = len(comments_lines) * 25  # 25px per line
             
             # Calculate total width and spacing
             spacing = 40  # Space between signature and comments
@@ -198,16 +198,16 @@ class SignatureAgent:
                 )
             
             # Add comments to the right of signature
-            if self.comments and comments_lines:
-                # Position comments to the right of the signature
-                comments_x = signature_x + signature_width + spacing if self.signature_image else (first_page_img.width - comments_width) // 2
-                comments_y = base_y - comments_height  # Align bottom of comments with base_y
+            # if self.comments and comments_lines:
+            #     # Position comments to the right of the signature
+            #     comments_x = signature_x + signature_width + spacing if self.signature_image else (first_page_img.width - comments_width) // 2
+            #     comments_y = base_y - comments_height  # Align bottom of comments with base_y
                 
-                # Draw each line of comments
-                y_text = comments_y
-                for line in comments_lines:
-                    draw.text((comments_x, y_text), line, fill="black", font=font)
-                    y_text += 25  # Move down for next line
+            #     # Draw each line of comments
+            #     y_text = comments_y
+            #     for line in comments_lines:
+            #         draw.text((comments_x, y_text), line, fill="black", font=font)
+            #         y_text += 25  # Move down for next line
             
             # Convert back to PDF with original page dimensions
             from reportlab.pdfgen import canvas
@@ -270,23 +270,23 @@ class SignatureAgent:
             comments_height = 0
             font = None
             
-            if self.comments:
-                try:
-                    font = ImageFont.truetype("arial.ttf", 24)  # Larger font for images
-                except IOError:
-                    font = ImageFont.load_default()
+            # if self.comments:
+            #     try:
+            #         font = ImageFont.truetype("arial.ttf", 24)  # Larger font for images
+            #     except IOError:
+            #         font = ImageFont.load_default()
                 
-                # Format Arabic text properly
-                formatted_comments = self._format_arabic_text(self.comments)
-                comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
+            #     # Format Arabic text properly
+            #     formatted_comments = self._format_arabic_text(self.comments)
+            #     comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
                 
-                # Calculate comments dimensions
-                for line in comments_lines:
-                    bbox = draw.textbbox((0, 0), line, font=font)
-                    line_width = bbox[2] - bbox[0]
-                    comments_width = max(comments_width, line_width)
+            #     # Calculate comments dimensions
+            #     for line in comments_lines:
+            #         bbox = draw.textbbox((0, 0), line, font=font)
+            #         line_width = bbox[2] - bbox[0]
+            #         comments_width = max(comments_width, line_width)
                 
-                comments_height = len(comments_lines) * 35  # 35px per line for images
+            #     comments_height = len(comments_lines) * 35  # 35px per line for images
             
             # Calculate total width and spacing
             spacing = 50  # Space between signature and comments
@@ -307,16 +307,16 @@ class SignatureAgent:
                 )
             
             # Add comments to the right of signature
-            if self.comments and comments_lines:
-                # Position comments to the right of the signature
-                comments_x = signature_x + signature_width + spacing if self.signature_image else (img.width - comments_width) // 2
-                comments_y = base_y - comments_height  # Align bottom of comments with base_y
+            # if self.comments and comments_lines:
+            #     # Position comments to the right of the signature
+            #     comments_x = signature_x + signature_width + spacing if self.signature_image else (img.width - comments_width) // 2
+            #     comments_y = base_y - comments_height  # Align bottom of comments with base_y
                 
-                # Draw each line of comments
-                y_text = comments_y
-                for line in comments_lines:
-                    draw.text((comments_x, y_text), line, fill="black", font=font)
-                    y_text += 35  # Move down for next line
+            #     # Draw each line of comments
+            #     y_text = comments_y
+            #     for line in comments_lines:
+            #         draw.text((comments_x, y_text), line, fill="black", font=font)
+            #         y_text += 35  # Move down for next line
             
             # Convert back to bytes
             output = BytesIO()
