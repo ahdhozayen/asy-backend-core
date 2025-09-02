@@ -89,6 +89,7 @@ class Signature(models.Model):
         related_name='signatures'
     )
     signature_data = models.TextField(help_text='Base64 encoded signature')
+    comments_data = models.TextField(blank=True, null=True, help_text='Base64 encoded comments')
     signed_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -98,3 +99,4 @@ class Signature(models.Model):
 
     def __str__(self):
         return f"Signature by {self.signed_by.username} on {self.signed_at}"
+
