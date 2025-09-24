@@ -249,8 +249,17 @@ class SignatureAgent:
     def _add_signature_to_image(self, image_bytes):
         """Add signature and comments to an image."""
         try:
-            # Open the image
-            img = Image.open(BytesIO(image_bytes)).convert('RGBA')
+            # Open the image and preserve original format and orientation
+            img = Image.open(BytesIO(image_bytes))
+            original_mode = img.mode
+            original_format = img.format
+
+            # Preserve EXIF data to maintain orientation
+            exif_dict = img.getexif() if hasattr(img, 'getexif') else None
+
+            # Convert to RGBA for transparency support during processing
+            if original_mode != 'RGBA':
+                img = img.convert('RGBA')
             
             # Resize signature to fit the image
             self._resize_signature(img.width)
@@ -259,7 +268,7 @@ class SignatureAgent:
             draw = ImageDraw.Draw(img)
             
             # Calculate positions for signature and comments side by side with proper bottom margin
-            bottom_margin = 100  # Increased margin from bottom for images
+            bottom_margin = 80  # Same margin as PDF
             base_y = img.height - bottom_margin
             
             # Determine the layout based on what we have
@@ -319,10 +328,30 @@ class SignatureAgent:
             #         draw.text((comments_x, y_text), line, fill="black", font=font)
             #         y_text += 35  # Move down for next line
             
-            # Convert back to bytes
+            # Convert back to original format to preserve orientation
             output = BytesIO()
-            img_format = 'PNG' if img.mode == 'RGBA' else 'JPEG'
-            img.save(output, format=img_format)
+
+            # Convert back to original mode if it was changed
+            if original_mode != 'RGBA' and img.mode == 'RGBA':
+                if original_mode == 'RGB':
+                    img = img.convert('RGB')
+                elif original_mode == 'L':
+                    img = img.convert('L')
+                elif original_mode == 'P':
+                    img = img.convert('P')
+
+            # Determine format - preserve original format if possible
+            if original_format and original_format in ['JPEG', 'PNG', 'BMP', 'GIF', 'TIFF']:
+                img_format = original_format
+            else:
+                img_format = 'PNG' if img.mode == 'RGBA' else 'JPEG'
+
+            # Save with preserved EXIF data if available
+            save_kwargs = {'format': img_format}
+            if exif_dict and img_format in ['JPEG', 'TIFF']:
+                save_kwargs['exif'] = exif_dict
+
+            img.save(output, **save_kwargs)
             return output.getvalue()
             
         except Exception as e:
@@ -331,46 +360,68 @@ class SignatureAgent:
     def process_document(self):
         """
         Process the document by adding the signature and comments.
-        
+        For images, signs ALL related attachments.
+        For PDFs, signs only the specific attachment.
+
         Returns:
-            ContentFile: The processed document ready to be saved.
+            Boolean: True if processing was successful.
         """
         if not self.signature_model.attachment.file:
             raise ValueError("No document attachment found")
-        
+
         # Decode the signature
         self._decode_signature()
-        
-        # Read the document file
+
+        # Check if this is an image document
         document_file = self.signature_model.attachment.file
         file_extension = self._get_file_extension(document_file.name)
-        
+
         try:
-            with document_file.open('rb') as f:
-                file_content = f.read()
-            
-            # Process based on file type
             if self._is_pdf(document_file.name):
-                processed_content = self._add_signature_to_pdf(file_content)
-                content_type = 'application/pdf'
-                file_extension = '.pdf'
+                # For PDFs, process only the specific attachment
+                self._process_single_attachment(self.signature_model.attachment)
             elif self._is_image(document_file.name):
-                processed_content = self._add_signature_to_image(file_content)
-                content_type = f'image/{file_extension[1:]}'  # remove the dot
+                # For images, process ALL attachments related to this document
+                all_attachments = self.document.attachments.all()
+                for attachment in all_attachments:
+                    if self._is_image(attachment.file.name):
+                        self._process_single_attachment(attachment)
             else:
                 raise ValueError(f"Unsupported file format: {file_extension}")
-            
-            # Create a ContentFile with the processed content
-            timestamp = int(datetime.now().timestamp())
-            filename = f"signed_{timestamp}{file_extension}"
-            file_like_obj = ContentFile(processed_content, name=filename)
-            self.signature_model.attachment.file = file_like_obj
-            self.signature_model.attachment.is_signed = True
-            self.signature_model.attachment.save()
+
+            # Update document status to signed
             self.document.status = 'signed'
             self.document.save()
-            
+
             return True
-            
+
         except Exception as e:
             raise Exception(f"Failed to process document: {str(e)}")
+
+    def _process_single_attachment(self, attachment):
+        """
+        Process a single attachment by adding signature and comments.
+
+        Args:
+            attachment: DocumentAttachment instance to process
+        """
+        with attachment.file.open('rb') as f:
+            file_content = f.read()
+
+        file_extension = self._get_file_extension(attachment.file.name)
+
+        # Process based on file type
+        if self._is_pdf(attachment.file.name):
+            processed_content = self._add_signature_to_pdf(file_content)
+        elif self._is_image(attachment.file.name):
+            processed_content = self._add_signature_to_image(file_content)
+        else:
+            raise ValueError(f"Unsupported file format: {file_extension}")
+
+        # Create a ContentFile with the processed content
+        timestamp = int(datetime.now().timestamp())
+        filename = f"signed_{timestamp}{file_extension}"
+        file_like_obj = ContentFile(processed_content, name=filename)
+        attachment.file = file_like_obj
+        attachment.is_signed = True
+        attachment.save()
