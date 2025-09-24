@@ -11,19 +11,30 @@ class Document(models.Model):
         ('medium', 'Medium'),
         ('low', 'Low'),
     ]
-    
+
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('in_review', 'In Review'),
         ('signed', 'Signed'),
     ]
+
+    FILE_TYPE_CHOICES = [
+        ('pdf', 'PDF Document'),
+        ('images', 'Image Files'),
+    ]
     
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     priority = models.CharField(
-        max_length=10, 
-        choices=PRIORITY_CHOICES, 
+        max_length=10,
+        choices=PRIORITY_CHOICES,
         default='medium'
+    )
+    file_type = models.CharField(
+        max_length=10,
+        choices=FILE_TYPE_CHOICES,
+        default='pdf',
+        help_text='Type of files to be uploaded for this document'
     )
     department = models.ForeignKey(Department, on_delete=models.CASCADE, default=1)
     status = models.CharField(

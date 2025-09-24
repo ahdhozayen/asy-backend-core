@@ -70,7 +70,7 @@ class ListDocumentSerializer(serializers.ModelSerializer):
 class DocumentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["id", "title", "description", "priority", "department", "comments"]
+        fields = ["id", "title", "description", "priority", "file_type", "department", "comments"]
 
 
 class DocumentUpdateSerializer(serializers.ModelSerializer):
@@ -85,6 +85,28 @@ class DocumentAttachmentCreateSerializer(serializers.ModelSerializer):
         model = DocumentAttachment
         fields = ["file", "document", "original_name"]
         extra_kwargs = {"file": {"required": True}, "document": {"required": True}}
+
+    def validate(self, data):
+        document = data.get('document')
+        file_obj = data.get('file')
+
+        if document and file_obj:
+            file_name = file_obj.name.lower()
+            file_type = document.file_type
+
+            if file_type == 'pdf':
+                if not file_name.endswith('.pdf'):
+                    raise serializers.ValidationError(
+                        "Only PDF files are allowed for this document type."
+                    )
+            elif file_type == 'images':
+                allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg']
+                if not any(file_name.endswith(ext) for ext in allowed_extensions):
+                    raise serializers.ValidationError(
+                        f"Only image files are allowed for this document type. Supported formats: {', '.join(allowed_extensions)}"
+                    )
+
+        return data
 
 
 class SignatureCreateSerializer(serializers.ModelSerializer):
