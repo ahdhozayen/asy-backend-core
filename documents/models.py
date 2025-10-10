@@ -100,7 +100,7 @@ class Signature(models.Model):
         on_delete=models.PROTECT,
         related_name='signatures'
     )
-    signature_data = models.TextField(help_text='Base64 encoded signature')
+    signature_data = models.TextField(blank=True, null=True, help_text='Base64 encoded signature')
     comments_data = models.TextField(blank=True, null=True, help_text='Base64 encoded comments')
     signed_at = models.DateTimeField(default=timezone.now)
 

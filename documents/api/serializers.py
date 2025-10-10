@@ -110,9 +110,11 @@ class DocumentAttachmentCreateSerializer(serializers.ModelSerializer):
 
 
 class SignatureCreateSerializer(serializers.ModelSerializer):
+    signature_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    comments_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     class Meta:
         model = Signature
         fields = ["attachment", "signature_data", "comments_data"]
         read_only_fields = ["signed_by", "signed_at"]
 
-        
