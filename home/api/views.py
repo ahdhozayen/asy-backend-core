@@ -16,7 +16,7 @@ class DocumentStatsViewSet(viewsets.ViewSet):
         from django.db.models import Count, Q
         
         user = request.user
-        queryset = Document.objects.all()
+        queryset = Document.objects.filter(is_deleted=False)
         
         # Apply role-based filtering
         if user.role != 'ceo':
