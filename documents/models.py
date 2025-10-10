@@ -56,6 +56,7 @@ class Document(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
     redirect_department = models.CharField(max_length=100, blank=True, null=True)
+    is_deleted = models.BooleanField(default=False, help_text='Soft delete flag')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

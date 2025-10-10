@@ -45,16 +45,17 @@ class DocumentViewSet(viewsets.GenericViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        queryset = Document.objects.all()
-        
+        # Exclude soft-deleted documents from all queries
+        queryset = Document.objects.filter(is_deleted=False)
+
         # Filter based on user role
         if user.role == 'ceo':
-            # CEO can see all documents
+            # CEO can see all documents (except deleted)
             return queryset
         else:
             # Helpdesk can see documents they uploaded or are assigned to review
             return queryset.filter(
-                Q(uploaded_by=user) | 
+                Q(uploaded_by=user) |
                 Q(reviewed_by=user) |
                 Q(status='pending')
             )
@@ -154,7 +155,9 @@ class DocumentViewSet(viewsets.GenericViewSet):
         queryset = self.get_queryset()
         document = get_object_or_404(queryset, pk=pk)
         document_id = document.id
-        document.delete()
+        # Soft delete: set is_deleted flag instead of calling delete()
+        document.is_deleted = True
+        document.save()
         return Response({
             'count': 0,
             'next': None,

@@ -11,7 +11,18 @@ class DocumentAdmin(admin.ModelAdmin):
         "priority",
         "department",
         "status",
+        "is_deleted",
+        "created_at",
     ]
+    list_filter = [
+        "is_deleted",
+        "status",
+        "priority",
+        "department",
+        "created_at",
+    ]
+    search_fields = ["title", "description"]
+    readonly_fields = ["created_at", "updated_at"]
 
 
 @admin.register(DocumentAttachment)
