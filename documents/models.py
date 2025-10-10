@@ -71,13 +71,23 @@ class Document(models.Model):
 
 class DocumentAttachment(models.Model):
     document = models.ForeignKey(
-        Document, 
+        Document,
         on_delete=models.CASCADE,
         related_name='attachments'
     )
     file = models.FileField(upload_to='documents/%Y/%m/%d/')
+    original_file = models.FileField(
+        upload_to='documents/originals/%Y/%m/%d/',
+        null=True,
+        blank=True,
+        help_text='Backup of original unsigned file for version management'
+    )
     original_name = models.CharField(max_length=255)
     is_signed = models.BooleanField(default=False)
+    version_number = models.IntegerField(
+        default=1,
+        help_text='Signature version number, increments with each re-signature'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

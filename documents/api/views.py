@@ -309,16 +309,71 @@ class SignatureViewSet(viewsets.ViewSet):
         return Response(serializer.data)
     
     def create(self, request):
+        import os
+        import shutil
+        from django.core.files import File
+
         data = request.data
         user_comments = data.pop("comments")
         print(data)
         serializer = SignatureCreateSerializer(data=data)
         if serializer.is_valid():
+            attachment_id = serializer.validated_data.get('attachment')
+
+            # Check if there are existing signatures for this attachment
+            existing_signatures = Signature.objects.filter(attachment=attachment_id)
+
+            if existing_signatures.exists():
+                # VERSION REPLACEMENT LOGIC
+                # 1. Get the attachment
+                attachment = attachment_id
+
+                # 2. If original_file doesn't exist, back up the current file first
+                if not attachment.original_file:
+                    # This is the first signature - back up the original
+                    original_file_path = attachment.file.path
+                    if os.path.exists(original_file_path):
+                        # Copy the original file to original_file field
+                        with open(original_file_path, 'rb') as f:
+                            file_name = os.path.basename(original_file_path)
+                            attachment.original_file.save(file_name, File(f), save=False)
+
+                # 3. Restore the original file to the main file field
+                if attachment.original_file:
+                    original_path = attachment.original_file.path
+                    current_path = attachment.file.path
+
+                    if os.path.exists(original_path):
+                        # Copy original back to current
+                        shutil.copy2(original_path, current_path)
+
+                # 4. Delete all existing signatures for this attachment
+                existing_signatures.delete()
+
+                # 5. Increment version number
+                attachment.version_number += 1
+                attachment.save()
+            else:
+                # FIRST SIGNATURE LOGIC
+                # Back up the original file before first signature
+                attachment = attachment_id
+                if not attachment.original_file:
+                    original_file_path = attachment.file.path
+                    if os.path.exists(original_file_path):
+                        with open(original_file_path, 'rb') as f:
+                            file_name = os.path.basename(original_file_path)
+                            attachment.original_file.save(file_name, File(f), save=False)
+                        attachment.save()
+
+            # Create the new signature
             signature_obj = serializer.save(signed_by=request.user)
             signature_obj.attachment.document.comments = user_comments
             signature_obj.attachment.document.save()
+
+            # Process the document with the new signature
             sign_doc = SignatureAgent(signature_obj)
             sign_doc.process_document()
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
