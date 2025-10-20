@@ -370,6 +370,25 @@ class SignatureViewSet(viewsets.ViewSet):
             signature_obj.attachment.document.comments = user_comments
             signature_obj.attachment.document.save()
 
+            # For image documents, increment version for ALL image attachments that will be processed
+            document = signature_obj.attachment.document
+            file_extension = os.path.splitext(signature_obj.attachment.file.name)[1].lower()
+            if file_extension in ['.png', '.jpg', '.jpeg']:
+                # This is an image document - all image attachments will be signed
+                # Check if this is a re-signature by checking the main attachment
+                main_attachment_version = signature_obj.attachment.version_number
+
+                # If main attachment version > 1, this is a re-signature for all images
+                if main_attachment_version > 1:
+                    all_image_attachments = document.attachments.filter(
+                        file__iregex=r'\.(png|jpg|jpeg)$'
+                    ).exclude(id=signature_obj.attachment.id)
+
+                    for attachment in all_image_attachments:
+                        # Increment version for all other image attachments
+                        attachment.version_number += 1
+                        attachment.save()
+
             # Process the document with the new signature
             sign_doc = SignatureAgent(signature_obj)
             sign_doc.process_document()
