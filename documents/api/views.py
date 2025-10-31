@@ -315,7 +315,6 @@ class SignatureViewSet(viewsets.ViewSet):
 
         data = request.data
         user_comments = data.pop("comments")
-        print(data)
         serializer = SignatureCreateSerializer(data=data)
         if serializer.is_valid():
             attachment_id = serializer.validated_data.get('attachment')
@@ -394,7 +393,52 @@ class SignatureViewSet(viewsets.ViewSet):
             sign_doc.process_document()
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Extract error messages for user-friendly display (both English and Arabic)
+        error_message_en = 'Failed to sign document'
+        error_message_ar = 'فشل في توقيع المستند'
+
+        if 'signature_data' in serializer.errors:
+            # Get the error message from signature_data field
+            error_data = serializer.errors['signature_data']
+            if isinstance(error_data, list) and len(error_data) > 0:
+                first_error = error_data[0]
+                # Check if it's a dict with en/ar keys
+                if isinstance(first_error, dict):
+                    error_message_en = first_error.get('en', error_message_en)
+                    error_message_ar = first_error.get('ar', error_message_ar)
+                else:
+                    error_message_en = str(first_error)
+                    error_message_ar = str(first_error)
+            elif isinstance(error_data, dict):
+                error_message_en = error_data.get('en', error_message_en)
+                error_message_ar = error_data.get('ar', error_message_ar)
+        elif serializer.errors:
+            # Get the first error from any field
+            first_field = next(iter(serializer.errors))
+            error_data = serializer.errors[first_field]
+            if isinstance(error_data, list) and len(error_data) > 0:
+                first_error = error_data[0]
+                if isinstance(first_error, dict):
+                    error_message_en = first_error.get('en', str(first_error))
+                    error_message_ar = first_error.get('ar', str(first_error))
+                else:
+                    error_message_en = str(first_error)
+                    error_message_ar = str(first_error)
+            elif isinstance(error_data, dict):
+                error_message_en = error_data.get('en', str(error_data))
+                error_message_ar = error_data.get('ar', str(error_data))
+
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': [],
+            'message_en': error_message_en,
+            'message_ar': error_message_ar,
+            'message': error_message_en,  # Keep for backward compatibility
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     def retrieve(self, request, pk=None):
         queryset = self.get_queryset()

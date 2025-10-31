@@ -23,32 +23,57 @@ class SignatureAgent:
     def __init__(self, signature_model):
         """
         Initialize the SignatureAgent with a Signature model instance.
-        
+
         Args:
             signature_model: An instance of the Signature model containing:
-                - signature: base64-encoded signature image
+                - signature_data: base64-encoded signature drawing image
+                - comments_data: base64-encoded comments text image
                 - attachment: ForeignKey to DocumentAttachment
         """
         self.signature_model = signature_model
         self.signature_image = None
+        self.comments_image = None
         self.document = signature_model.attachment.document
-        # self.comments = self.document.comments if hasattr(self.document, 'comments') else ""
-        
+
     def _decode_signature(self):
         """Decode the base64 signature into a PIL Image."""
         try:
+            if not self.signature_model.signature_data:
+                self.signature_image = None
+                return True
+
             # Remove the data URL prefix if present
             if 'base64,' in self.signature_model.signature_data:
                 base64_str = self.signature_model.signature_data.split('base64,')[1]
             else:
                 base64_str = self.signature_model.signature_data
-                
+
             # Decode base64 to bytes and create PIL Image
             signature_data = base64.b64decode(base64_str)
             self.signature_image = Image.open(BytesIO(signature_data)).convert('RGBA')
             return True
         except Exception as e:
             raise ValueError(f"Failed to decode signature: {str(e)}")
+
+    def _decode_comments(self):
+        """Decode the base64 comments into a PIL Image."""
+        try:
+            if not self.signature_model.comments_data:
+                self.comments_image = None
+                return True
+
+            # Remove the data URL prefix if present
+            if 'base64,' in self.signature_model.comments_data:
+                base64_str = self.signature_model.comments_data.split('base64,')[1]
+            else:
+                base64_str = self.signature_model.comments_data
+
+            # Decode base64 to bytes and create PIL Image
+            comments_data = base64.b64decode(base64_str)
+            self.comments_image = Image.open(BytesIO(comments_data)).convert('RGBA')
+            return True
+        except Exception as e:
+            raise ValueError(f"Failed to decode comments: {str(e)}")
     
     def _get_file_extension(self, filename):
         """Get the lowercase file extension."""
@@ -62,22 +87,22 @@ class SignatureAgent:
         """Check if the file is a supported image format."""
         return self._get_file_extension(filename) in self.IMAGE_EXTENSIONS
     
-    def _resize_signature(self, target_width):
-        """Resize the signature to fit the target width while maintaining aspect ratio."""
-        if not self.signature_image:
-            return False
-            
-        # Calculate new size (30% of target width, maintaining aspect ratio)
-        target_width = int(target_width * 0.3)
-        aspect_ratio = self.signature_image.width / self.signature_image.height
-        new_height = int(target_width / aspect_ratio)
-        
-        # Resize the signature
-        self.signature_image = self.signature_image.resize(
-            (target_width, new_height),
+    def _resize_image(self, image, target_width, scale_factor=0.3):
+        """Resize an image to fit the target width while maintaining aspect ratio."""
+        if not image:
+            return None
+
+        # Calculate new size (scale_factor of target width, maintaining aspect ratio)
+        new_width = int(target_width * scale_factor)
+        aspect_ratio = image.width / image.height
+        new_height = int(new_width / aspect_ratio)
+
+        # Resize the image
+        resized = image.resize(
+            (new_width, new_height),
             Image.Resampling.LANCZOS
         )
-        return True
+        return resized
     
     def _format_arabic_text(self, text):
         """Format Arabic text to display correctly (right-to-left)."""
@@ -134,81 +159,52 @@ class SignatureAgent:
             if first_page_img.size != (width_px, height_px):
                 # Resize the image to match original dimensions while maintaining aspect ratio
                 first_page_img = first_page_img.resize((width_px, height_px), Image.Resampling.LANCZOS)
-            
-            # Resize signature to fit the page
-            self._resize_signature(first_page_img.width)
-            
-            # Create a drawing context
-            draw = ImageDraw.Draw(first_page_img)
-            
-            # Calculate positions for signature and comments side by side with proper bottom margin
-            bottom_margin = 80  # Increased margin from bottom
-            base_y = first_page_img.height - bottom_margin
-            
-            # Determine the layout based on what we have
-            signature_width = self.signature_image.width if self.signature_image else 0
-            
-            # Prepare comments text and calculate dimensions
-            comments_lines = []
-            comments_width = 0
-            comments_height = 0
-            font = None
-            
-            # if self.comments:
-            #     # Use bold font with 18pt size for better visibility
-            #     try:
-            #         font = ImageFont.truetype("arialbd.ttf", 18)  # Arial Bold
-            #     except IOError:
-            #         try:
-            #             font = ImageFont.truetype("arial.ttf", 18)  # Fallback to regular Arial
-            #         except IOError:
-            #             font = ImageFont.load_default()
-                
-            #     # Format Arabic text properly
-            #     formatted_comments = self._format_arabic_text(self.comments)
-            #     comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
-                
-            #     # Calculate comments dimensions
-            #     for line in comments_lines:
-            #         bbox = draw.textbbox((0, 0), line, font=font)
-            #         line_width = bbox[2] - bbox[0]
-            #         comments_width = max(comments_width, line_width)
-                
-            #     comments_height = len(comments_lines) * 25  # 25px per line
-            
-            # Calculate total width and spacing
-            spacing = 40  # Space between signature and comments
-            total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
-            
-            # Position signature and comments side by side at bottom center
-            if self.signature_image:
-                # Calculate starting position to center the combined signature + comments
-                start_x = (first_page_img.width - total_width) // 2
-                signature_x = start_x
-                signature_y = base_y - self.signature_image.height  # Align bottom of signature with base_y
-                
+
+            # Resize signature and comments images to fit the page
+            resized_signature = self._resize_image(self.signature_image, first_page_img.width, scale_factor=0.25)
+            resized_comments = self._resize_image(self.comments_image, first_page_img.width, scale_factor=0.5)  # Increased from 0.35 to 0.5
+
+            # Calculate positions with bottom margin
+            bottom_margin = 250  # Margin from bottom
+            left_margin = 60    # Margin from left for signature
+
+            # Position signature at bottom left
+            if resized_signature:
+                signature_x = left_margin
+                signature_y = first_page_img.height - bottom_margin - resized_signature.height
+
                 # Ensure signature has transparency
-                if self.signature_image.mode != 'RGBA':
-                    self.signature_image = self.signature_image.convert('RGBA')
-                
+                if resized_signature.mode != 'RGBA':
+                    resized_signature = resized_signature.convert('RGBA')
+
                 # Paste signature with transparency
                 first_page_img.paste(
-                    self.signature_image,
+                    resized_signature,
                     (signature_x, signature_y),
-                    self.signature_image  # Use the image itself as mask to preserve transparency
+                    resized_signature  # Use the image itself as mask to preserve transparency
                 )
-            
-            # Add comments to the right of signature
-            # if self.comments and comments_lines:
-            #     # Position comments to the right of the signature
-            #     comments_x = signature_x + signature_width + spacing if self.signature_image else (first_page_img.width - comments_width) // 2
-            #     comments_y = base_y - comments_height  # Align bottom of comments with base_y
-                
-            #     # Draw each line of comments
-            #     y_text = comments_y
-            #     for line in comments_lines:
-            #         draw.text((comments_x, y_text), line, fill="black", font=font)
-            #         y_text += 25  # Move down for next line
+
+            # Position comments at bottom right
+            if resized_comments:
+                # Ensure comments has transparency before rotation
+                if resized_comments.mode != 'RGBA':
+                    resized_comments = resized_comments.convert('RGBA')
+
+                # Rotate comments image by 20 degrees
+                resized_comments = resized_comments.rotate(20, expand=True, resample=Image.Resampling.BICUBIC)
+
+                # Adjust position: move right and up
+                x_offset = 30  # Move more to the right
+                y_offset = -20  # Move up
+                comments_x = left_margin + resized_signature.width + x_offset
+                comments_y = first_page_img.height - bottom_margin - resized_signature.height + y_offset
+
+                # Paste comments with transparency
+                first_page_img.paste(
+                    resized_comments,
+                    (comments_x, comments_y),
+                    resized_comments  # Use the image itself as mask to preserve transparency
+                )
             
             # Convert back to PDF with original page dimensions
             from reportlab.pdfgen import canvas
@@ -260,73 +256,52 @@ class SignatureAgent:
             # Convert to RGBA for transparency support during processing
             if original_mode != 'RGBA':
                 img = img.convert('RGBA')
-            
-            # Resize signature to fit the image
-            self._resize_signature(img.width)
-            
-            # Create a drawing context
-            draw = ImageDraw.Draw(img)
-            
-            # Calculate positions for signature and comments side by side with proper bottom margin
-            bottom_margin = 80  # Same margin as PDF
-            base_y = img.height - bottom_margin
-            
-            # Determine the layout based on what we have
-            signature_width = self.signature_image.width if self.signature_image else 0
-            
-            # Prepare comments text and calculate dimensions
-            comments_lines = []
-            comments_width = 0
-            comments_height = 0
-            font = None
-            
-            # if self.comments:
-            #     try:
-            #         font = ImageFont.truetype("arial.ttf", 24)  # Larger font for images
-            #     except IOError:
-            #         font = ImageFont.load_default()
-                
-            #     # Format Arabic text properly
-            #     formatted_comments = self._format_arabic_text(self.comments)
-            #     comments_lines = [line for line in formatted_comments.split('\n') if line.strip()]
-                
-            #     # Calculate comments dimensions
-            #     for line in comments_lines:
-            #         bbox = draw.textbbox((0, 0), line, font=font)
-            #         line_width = bbox[2] - bbox[0]
-            #         comments_width = max(comments_width, line_width)
-                
-            #     comments_height = len(comments_lines) * 35  # 35px per line for images
-            
-            # Calculate total width and spacing
-            spacing = 50  # Space between signature and comments
-            total_width = signature_width + (spacing if signature_width > 0 and comments_width > 0 else 0) + comments_width
-            
-            # Position signature and comments side by side at bottom center
-            if self.signature_image:
-                # Calculate starting position to center the combined signature + comments
-                start_x = (img.width - total_width) // 2
-                signature_x = start_x
-                signature_y = base_y - self.signature_image.height  # Align bottom of signature with base_y
-                
+
+            # Resize signature and comments images to fit the page
+            resized_signature = self._resize_image(self.signature_image, img.width, scale_factor=0.25)
+            resized_comments = self._resize_image(self.comments_image, img.width, scale_factor=0.5)  # Increased from 0.35 to 0.5
+
+            # Calculate positions with bottom margin
+            bottom_margin = 250  # Margin from bottom
+            left_margin = 60    # Margin from left for signature
+
+            # Position signature at bottom left
+            if resized_signature:
+                signature_x = left_margin
+                signature_y = img.height - bottom_margin - resized_signature.height
+
+                # Ensure signature has transparency
+                if resized_signature.mode != 'RGBA':
+                    resized_signature = resized_signature.convert('RGBA')
+
                 # Paste signature with transparency
                 img.paste(
-                    self.signature_image,
+                    resized_signature,
                     (signature_x, signature_y),
-                    self.signature_image
+                    resized_signature
                 )
-            
-            # Add comments to the right of signature
-            # if self.comments and comments_lines:
-            #     # Position comments to the right of the signature
-            #     comments_x = signature_x + signature_width + spacing if self.signature_image else (img.width - comments_width) // 2
-            #     comments_y = base_y - comments_height  # Align bottom of comments with base_y
-                
-            #     # Draw each line of comments
-            #     y_text = comments_y
-            #     for line in comments_lines:
-            #         draw.text((comments_x, y_text), line, fill="black", font=font)
-            #         y_text += 35  # Move down for next line
+
+            # Position comments next to signature (same as PDF positioning)
+            if resized_comments:
+                # Ensure comments has transparency before rotation
+                if resized_comments.mode != 'RGBA':
+                    resized_comments = resized_comments.convert('RGBA')
+
+                # Rotate comments image by 20 degrees
+                resized_comments = resized_comments.rotate(20, expand=True, resample=Image.Resampling.BICUBIC)
+
+                # Adjust position: move right and up
+                x_offset = 30  # Move more to the right
+                y_offset = -20  # Move up
+                comments_x = left_margin + resized_signature.width + x_offset
+                comments_y = img.height - bottom_margin - resized_signature.height + y_offset
+
+                # Paste comments with transparency
+                img.paste(
+                    resized_comments,
+                    (comments_x, comments_y),
+                    resized_comments
+                )
             
             # Convert back to original format to preserve orientation
             output = BytesIO()
@@ -369,8 +344,9 @@ class SignatureAgent:
         if not self.signature_model.attachment.file:
             raise ValueError("No document attachment found")
 
-        # Decode the signature
+        # Decode both signature and comments images
         self._decode_signature()
+        self._decode_comments()
 
         # Check if this is an image document
         document_file = self.signature_model.attachment.file

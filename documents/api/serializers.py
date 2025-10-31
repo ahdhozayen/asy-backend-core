@@ -118,3 +118,28 @@ class SignatureCreateSerializer(serializers.ModelSerializer):
         fields = ["attachment", "signature_data", "comments_data"]
         read_only_fields = ["signed_by", "signed_at"]
 
+    def validate_signature_data(self, value):
+        """
+        Validate that signature_data is not None or empty.
+        """
+        if not value or value.strip() == '':
+            raise serializers.ValidationError({
+                'en': 'Please add your signature before submitting the document.',
+                'ar': 'يرجى إضافة توقيعك قبل إرسال المستند.'
+            })
+        return value
+
+    def validate(self, data):
+        """
+        Ensure that signature_data is provided.
+        """
+        signature_data = data.get('signature_data')
+        if not signature_data or signature_data.strip() == '':
+            raise serializers.ValidationError({
+                'signature_data': {
+                    'en': 'Please add your signature before submitting the document.',
+                    'ar': 'يرجى إضافة توقيعك قبل إرسال المستند.'
+                }
+            })
+        return data
+
