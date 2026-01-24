@@ -311,6 +311,8 @@ class SignatureViewSet(viewsets.ViewSet):
     def create(self, request):
         import os
         import shutil
+        from datetime import datetime
+        from pathlib import Path
         from django.core.files import File
 
         data = request.data
@@ -332,9 +334,11 @@ class SignatureViewSet(viewsets.ViewSet):
                     # This is the first signature - back up the original
                     original_file_path = attachment.file.path
                     if os.path.exists(original_file_path):
-                        # Copy the original file to original_file field
+                        # Copy the original file to original_file field with timestamp filename
                         with open(original_file_path, 'rb') as f:
-                            file_name = os.path.basename(original_file_path)
+                            file_extension = Path(attachment.file.name).suffix.lower()
+                            timestamp = int(datetime.now().timestamp())
+                            file_name = f"{timestamp}{file_extension}"
                             attachment.original_file.save(file_name, File(f), save=False)
 
                 # 3. Restore the original file to the main file field
@@ -360,7 +364,9 @@ class SignatureViewSet(viewsets.ViewSet):
                     original_file_path = attachment.file.path
                     if os.path.exists(original_file_path):
                         with open(original_file_path, 'rb') as f:
-                            file_name = os.path.basename(original_file_path)
+                            file_extension = Path(attachment.file.name).suffix.lower()
+                            timestamp = int(datetime.now().timestamp())
+                            file_name = f"{timestamp}{file_extension}"
                             attachment.original_file.save(file_name, File(f), save=False)
                         attachment.save()
 

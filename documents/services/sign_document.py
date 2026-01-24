@@ -15,10 +15,43 @@ class SignatureAgent:
     """
     A class to handle document signing with base64-encoded signatures and comments.
     Supports both PDF and image documents.
+    
+    Positioning System:
+    -------------------
+    The class uses percentage-based positioning to ensure consistent placement of
+    signatures and comments across different document sizes (A4, Letter, Legal, etc.).
+    
+    Percentage-based positioning:
+    - Positions are calculated as percentages (0.0 to 1.0) of document dimensions
+    - SIGNATURE_HORIZONTAL_POSITION: 0.85 = 85% from left (right-aligned)
+    - SIGNATURE_VERTICAL_POSITION = 0.95    # 95% from top (bottom-aligned)
+    - PADDING_PERCENTAGE = 0.02             # 2% padding as minimum margin from edges
+    
+    Layout:
+    - Signature: Bottom-right corner with configurable padding
+    - Comments: Positioned directly above signature with minimal gap
+    
+    Example:
+    --------
+    To position signature at 90% from left and 97% from top:
+        SignatureAgent.SIGNATURE_HORIZONTAL_POSITION = 0.90
+        SignatureAgent.SIGNATURE_VERTICAL_POSITION = 0.97
     """
     
     # Supported image extensions
     IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
+    
+    # Percentage-based position configuration (0.0 to 1.0)
+    # These values represent position as a percentage of document dimensions
+    SIGNATURE_HORIZONTAL_POSITION = 0.85  # 85% from left (right-aligned)
+    SIGNATURE_VERTICAL_POSITION = 0.95    # 95% from top (bottom-aligned)
+    PADDING_PERCENTAGE = 0             # 2% padding as minimum margin from edges
+    
+    # Comments positioning relative to signature (in pixels, not percentage)
+    # Reduced to minimal gap between comments and signature
+    COMMENTS_VERTICAL_GAP_PIXELS = 1      # Only 5 pixels gap between comments and signature
+    COMMENTS_HORIZONTAL_ALIGN = True      # True = center align with signature, False = same x position
+    
     
     def __init__(self, signature_model):
         """
@@ -34,6 +67,193 @@ class SignatureAgent:
         self.signature_image = None
         self.comments_image = None
         self.document = signature_model.attachment.document
+    
+    @staticmethod
+    def _validate_percentage(value, name='percentage'):
+        """
+        Validate that a percentage value is within valid range (0.0 to 1.0).
+        
+        Args:
+            value: The percentage value to validate
+            name: Name of the parameter for error messages
+            
+        Returns:
+            float: Validated percentage value
+            
+        Raises:
+            ValueError: If value is outside valid range
+        """
+        if not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a number")
+        if value < 0.0 or value > 1.0:
+            raise ValueError(f"{name} must be between 0.0 and 1.0, got {value}")
+        return float(value)
+    
+    @staticmethod
+    def _calculate_percentage_position(
+        document_dimension, 
+        element_dimension, 
+        percentage, 
+        padding_percentage=None,
+        align_right=False,
+        align_bottom=False
+    ):
+        """
+        Calculate absolute position based on percentage of document dimension.
+        
+        Args:
+            document_dimension: Width or height of the document (pixels)
+            element_dimension: Width or height of the element to position (pixels)
+            percentage: Position as percentage (0.0 to 1.0)
+            padding_percentage: Optional padding to apply (0.0 to 1.0)
+            align_right: If True, position is calculated from right edge
+            align_bottom: If True, position is calculated from bottom edge
+            
+        Returns:
+            int: Absolute position in pixels
+        """
+        # Validate percentage
+        percentage = SignatureAgent._validate_percentage(percentage, 'percentage')
+        
+        # Calculate base position from percentage
+        if align_right or align_bottom:
+            # For right/bottom alignment: position is calculated from the edge
+            # percentage represents where the right/bottom edge should be
+            position = document_dimension * percentage - element_dimension
+        else:
+            # For left/top alignment: position is calculated from the start
+            # percentage represents where the left/top edge should be
+            position = document_dimension * percentage
+        
+        # Apply padding constraints if provided
+        if padding_percentage is not None:
+            padding = SignatureAgent._validate_percentage(padding_percentage, 'padding_percentage')
+            padding_pixels = document_dimension * padding
+            
+            if align_right or align_bottom:
+                # For right/bottom alignment:
+                # - Ensure element doesn't exceed padding from right/bottom edge
+                max_position = document_dimension - element_dimension - padding_pixels
+                # - Ensure element doesn't exceed padding from left/top edge
+                min_position = padding_pixels
+                position = max(min_position, min(position, max_position))
+            else:
+                # For left/top alignment:
+                # - Ensure element doesn't exceed padding from left/top edge
+                min_position = padding_pixels
+                # - Ensure element doesn't exceed padding from right/bottom edge
+                max_position = document_dimension - element_dimension - padding_pixels
+                position = max(min_position, min(position, max_position))
+        else:
+            # No padding, just ensure position is within document bounds
+            if align_right or align_bottom:
+                position = max(0, position)
+            else:
+                position = max(0, min(position, document_dimension - element_dimension))
+        
+        return int(position)
+    
+    def _calculate_signature_position(self, doc_width, doc_height, signature_width, signature_height):
+        """
+        Calculate signature position using percentage-based positioning.
+        
+        Args:
+            doc_width: Document width in pixels
+            doc_height: Document height in pixels
+            signature_width: Signature image width in pixels
+            signature_height: Signature image height in pixels
+            
+        Returns:
+            tuple: (x, y) position in pixels
+        """
+        # Percentage-based positioning (bottom-right corner)
+        x = self._calculate_percentage_position(
+            doc_width,
+            signature_width,
+            SignatureAgent.SIGNATURE_HORIZONTAL_POSITION,
+            padding_percentage=SignatureAgent.PADDING_PERCENTAGE,
+            align_right=True
+        )
+        
+        y = self._calculate_percentage_position(
+            doc_height,
+            signature_height,
+            SignatureAgent.SIGNATURE_VERTICAL_POSITION,
+            padding_percentage=SignatureAgent.PADDING_PERCENTAGE,
+            align_bottom=True
+        )
+        
+        return (x, y)
+    
+    def _calculate_comments_position(
+        self, 
+        doc_width, 
+        doc_height, 
+        comments_width, 
+        comments_height,
+        signature_x=None,
+        signature_y=None,
+        signature_height=None,
+        signature_width=None
+    ):
+        """
+        Calculate comments position to be directly above signature with minimal gap.
+        
+        Args:
+            doc_width: Document width in pixels
+            doc_height: Document height in pixels
+            comments_width: Comments image width in pixels
+            comments_height: Comments image height in pixels
+            signature_x: Signature X position (for alignment)
+            signature_y: Signature Y position (for positioning above)
+            signature_height: Signature height
+            signature_width: Signature width (for horizontal alignment)
+            
+        Returns:
+            tuple: (x, y) position in pixels
+        """
+        # If we have signature position, position comments directly above it
+        if signature_x is not None and signature_y is not None:
+            # Horizontal positioning: center-align comments with signature
+            if SignatureAgent.COMMENTS_HORIZONTAL_ALIGN and signature_width is not None:
+                # Center comments above signature
+                x = signature_x + (signature_width - comments_width)
+            else:
+                # Use same x position as signature (left-aligned)
+                x = signature_x
+                
+            # Ensure not off-page horizontally
+            x = max(int(doc_width * SignatureAgent.PADDING_PERCENTAGE), 
+                   min(x, doc_width - comments_width - int(doc_width * SignatureAgent.PADDING_PERCENTAGE)))
+            
+            # Vertical positioning: DIRECTLY above signature with minimal gap
+            # Position comments so its bottom edge is just above signature's top edge
+            y = signature_y - comments_height - SignatureAgent.COMMENTS_VERTICAL_GAP_PIXELS
+            
+            # Ensure not off the top of the page
+            min_y = int(doc_height * SignatureAgent.PADDING_PERCENTAGE)
+            y = max(min_y, y)
+            
+        else:
+            # Fallback: position using percentage (for when signature is not present)
+            x = self._calculate_percentage_position(
+                doc_width,
+                comments_width,
+                SignatureAgent.SIGNATURE_HORIZONTAL_POSITION,
+                padding_percentage=SignatureAgent.PADDING_PERCENTAGE,
+                align_right=True
+            )
+            
+            # Position higher than signature would be (since signature is at 95%, put comments at 90%)
+            y = self._calculate_percentage_position(
+                doc_height,
+                comments_height,
+                SignatureAgent.SIGNATURE_VERTICAL_POSITION - 0.05,  # 5% above signature position
+                padding_percentage=SignatureAgent.PADDING_PERCENTAGE,
+                align_bottom=True
+            )
+        
+        return (x, y)
 
     def _decode_signature(self):
         """Decode the base64 signature into a PIL Image."""
@@ -161,17 +381,25 @@ class SignatureAgent:
                 first_page_img = first_page_img.resize((width_px, height_px), Image.Resampling.LANCZOS)
 
             # Resize signature and comments images to fit the page
+            # Scale factors are percentage-based relative to document width
             resized_signature = self._resize_image(self.signature_image, first_page_img.width, scale_factor=0.25)
-            resized_comments = self._resize_image(self.comments_image, first_page_img.width, scale_factor=0.5)  # Increased from 0.35 to 0.5
+            resized_comments = self._resize_image(self.comments_image, first_page_img.width, scale_factor=0.5)
 
-            # Calculate positions with bottom margin
-            bottom_margin = 250  # Margin from bottom
-            left_margin = 60    # Margin from left for signature
-
-            # Position signature at bottom left
+            # Calculate signature position
+            signature_x = None
+            signature_y = None
+            signature_width = None
+            signature_height = None
+            
             if resized_signature:
-                signature_x = left_margin
-                signature_y = first_page_img.height - bottom_margin - resized_signature.height
+                signature_width = resized_signature.width
+                signature_height = resized_signature.height
+                signature_x, signature_y = self._calculate_signature_position(
+                    first_page_img.width,
+                    first_page_img.height,
+                    signature_width,
+                    signature_height
+                )
 
                 # Ensure signature has transparency
                 if resized_signature.mode != 'RGBA':
@@ -181,29 +409,40 @@ class SignatureAgent:
                 first_page_img.paste(
                     resized_signature,
                     (signature_x, signature_y),
-                    resized_signature  # Use the image itself as mask to preserve transparency
+                    resized_signature
                 )
 
-            # Position comments at bottom right
+            # Process comments if available
             if resized_comments:
-                # Ensure comments has transparency before rotation
+                # Ensure comments has transparency
                 if resized_comments.mode != 'RGBA':
                     resized_comments = resized_comments.convert('RGBA')
 
-                # Rotate comments image by 20 degrees
-                resized_comments = resized_comments.rotate(20, expand=True, resample=Image.Resampling.BICUBIC)
+                
+                # Calculate comments position to be DIRECTLY above signature
+                comments_x, comments_y = self._calculate_comments_position(
+                    first_page_img.width,
+                    first_page_img.height,
+                    resized_comments.width,
+                    resized_comments.height,
+                    signature_x=signature_x,
+                    signature_y=signature_y,
+                    signature_height=signature_height,
+                    signature_width=signature_width
+                )
 
-                # Adjust position: move right and up
-                x_offset = 30  # Move more to the right
-                y_offset = -20  # Move up
-                comments_x = left_margin + resized_signature.width + x_offset
-                comments_y = first_page_img.height - bottom_margin - resized_signature.height + y_offset
-
+                # Rotate comments image by 20 degrees - BEFORE position calculation
+                rotated_comments = resized_comments.rotate(
+                    20, 
+                    expand=True, 
+                    resample=Image.Resampling.BICUBIC,
+                    fillcolor=(0, 0, 0, 0)  # Transparent background for rotation
+                )
                 # Paste comments with transparency
                 first_page_img.paste(
-                    resized_comments,
+                    rotated_comments,
                     (comments_x, comments_y),
-                    resized_comments  # Use the image itself as mask to preserve transparency
+                    rotated_comments
                 )
             
             # Convert back to PDF with original page dimensions
@@ -257,18 +496,25 @@ class SignatureAgent:
             if original_mode != 'RGBA':
                 img = img.convert('RGBA')
 
-            # Resize signature and comments images to fit the page
+            # Resize signature and comments images
             resized_signature = self._resize_image(self.signature_image, img.width, scale_factor=0.25)
-            resized_comments = self._resize_image(self.comments_image, img.width, scale_factor=0.5)  # Increased from 0.35 to 0.5
+            resized_comments = self._resize_image(self.comments_image, img.width, scale_factor=0.5)
 
-            # Calculate positions with bottom margin
-            bottom_margin = 250  # Margin from bottom
-            left_margin = 60    # Margin from left for signature
+            # Calculate signature position
+            signature_x = None
+            signature_y = None
+            signature_width = None
+            signature_height = None
 
-            # Position signature at bottom left
             if resized_signature:
-                signature_x = left_margin
-                signature_y = img.height - bottom_margin - resized_signature.height
+                signature_width = resized_signature.width
+                signature_height = resized_signature.height
+                signature_x, signature_y = self._calculate_signature_position(
+                    img.width,
+                    img.height,
+                    signature_width,
+                    signature_height
+                )
 
                 # Ensure signature has transparency
                 if resized_signature.mode != 'RGBA':
@@ -281,32 +527,42 @@ class SignatureAgent:
                     resized_signature
                 )
 
-            # Position comments next to signature (same as PDF positioning)
+            # Process comments if available
             if resized_comments:
-                # Ensure comments has transparency before rotation
+                # Ensure comments has transparency
                 if resized_comments.mode != 'RGBA':
                     resized_comments = resized_comments.convert('RGBA')
 
-                # Rotate comments image by 20 degrees
-                resized_comments = resized_comments.rotate(20, expand=True, resample=Image.Resampling.BICUBIC)
+                
+                # Calculate comments position to be DIRECTLY above signature
+                comments_x, comments_y = self._calculate_comments_position(
+                    img.width,
+                    img.height,
+                    resized_comments.width,
+                    resized_comments.height,
+                    signature_x=signature_x,
+                    signature_y=signature_y,
+                    signature_height=signature_height,
+                    signature_width=signature_width
+                )
 
-                # Adjust position: move right and up
-                x_offset = 30  # Move more to the right
-                y_offset = -20  # Move up
-                comments_x = left_margin + resized_signature.width + x_offset
-                comments_y = img.height - bottom_margin - resized_signature.height + y_offset
-
+                # Rotate comments image by 20 degrees - BEFORE position calculation
+                rotated_comments = resized_comments.rotate(
+                    20, 
+                    expand=True, 
+                    resample=Image.Resampling.BICUBIC,
+                    fillcolor=(0, 0, 0, 0)  # Transparent background
+                )
                 # Paste comments with transparency
                 img.paste(
-                    resized_comments,
+                    rotated_comments,
                     (comments_x, comments_y),
-                    resized_comments
+                    rotated_comments
                 )
             
-            # Convert back to original format to preserve orientation
+            # Convert back to original format
             output = BytesIO()
 
-            # Convert back to original mode if it was changed
             if original_mode != 'RGBA' and img.mode == 'RGBA':
                 if original_mode == 'RGB':
                     img = img.convert('RGB')
@@ -315,7 +571,7 @@ class SignatureAgent:
                 elif original_mode == 'P':
                     img = img.convert('P')
 
-            # Determine format - preserve original format if possible
+            # Determine format
             if original_format and original_format in ['JPEG', 'PNG', 'BMP', 'GIF', 'TIFF']:
                 img_format = original_format
             else:

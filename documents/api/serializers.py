@@ -1,4 +1,7 @@
+from datetime import datetime
+from pathlib import Path
 from rest_framework import serializers
+from django.core.files.base import ContentFile
 from documents.models import Document, DocumentAttachment, Signature
 from users.models import User
 
@@ -94,19 +97,79 @@ class DocumentAttachmentCreateSerializer(serializers.ModelSerializer):
             file_name = file_obj.name.lower()
             file_type = document.file_type
 
+            # Get file extension
+            file_extension = Path(file_name).suffix.lower()
+
+            # Validate PDF files
             if file_type == 'pdf':
-                if not file_name.endswith('.pdf'):
+                allowed_extensions = ['.pdf']
+                allowed_mime_types = ['application/pdf']
+                
+                # Check file extension
+                if file_extension not in allowed_extensions:
                     raise serializers.ValidationError(
-                        "Only PDF files are allowed for this document type."
+                        f"Invalid file type. Only PDF files are allowed for this document type. "
+                        f"Received file with extension: {file_extension}"
                     )
+                
+                # Additional validation: Check MIME type if available
+                if hasattr(file_obj, 'content_type') and file_obj.content_type:
+                    if file_obj.content_type not in allowed_mime_types:
+                        raise serializers.ValidationError(
+                            f"File MIME type '{file_obj.content_type}' does not match PDF format. "
+                            f"Please upload a valid PDF file."
+                        )
+            
+            # Validate Image files
             elif file_type == 'images':
                 allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg']
-                if not any(file_name.endswith(ext) for ext in allowed_extensions):
+                allowed_mime_types = [
+                    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
+                    'image/bmp', 'image/webp', 'image/tiff', 'image/svg+xml'
+                ]
+                
+                # Check file extension
+                if file_extension not in allowed_extensions:
                     raise serializers.ValidationError(
-                        f"Only image files are allowed for this document type. Supported formats: {', '.join(allowed_extensions)}"
+                        f"Invalid file type. Only image files are allowed for this document type. "
+                        f"Supported formats: {', '.join(allowed_extensions)}. "
+                        f"Received file with extension: {file_extension}"
                     )
+                
+                # Additional validation: Check MIME type if available
+                if hasattr(file_obj, 'content_type') and file_obj.content_type:
+                    if file_obj.content_type not in allowed_mime_types:
+                        raise serializers.ValidationError(
+                            f"File MIME type '{file_obj.content_type}' does not match image format. "
+                            f"Please upload a valid image file."
+                        )
 
         return data
+
+    def create(self, validated_data):
+        """
+        Create a DocumentAttachment with renamed file using integer timestamp.
+        This prevents issues with Arabic or special characters in filenames.
+        """
+        file_obj = validated_data['file']
+        original_name = validated_data.get('original_name', file_obj.name)
+        
+        # Get file extension from original file
+        file_extension = Path(file_obj.name).suffix.lower()
+        
+        # Generate new filename using integer timestamp
+        timestamp = int(datetime.now().timestamp())
+        new_filename = f"{timestamp}{file_extension}"
+        
+        # Read file content and create new ContentFile with renamed filename
+        file_content = file_obj.read()
+        renamed_file = ContentFile(file_content, name=new_filename)
+        
+        # Replace the file in validated_data with the renamed file
+        validated_data['file'] = renamed_file
+        
+        # Create and return the attachment
+        return super().create(validated_data)
 
 
 class SignatureCreateSerializer(serializers.ModelSerializer):
