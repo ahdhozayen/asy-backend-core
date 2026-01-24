@@ -33,8 +33,10 @@ class DocumentSerializer(serializers.ModelSerializer):
     uploaded_by = SignedBySerializer(read_only=True)
     reviewed_by = SignedBySerializer(read_only=True)
     attachments = DocumentAttachmentSerializer(many=True, read_only=True)
-    department_ar = serializers.CharField(source='department.name_ar')
-    department_en = serializers.CharField(source='department.name_en')
+    priority_ar = serializers.CharField(source='priority.name_ar', read_only=True)
+    priority_en = serializers.CharField(source='priority.name_en', read_only=True)
+    department_ar = serializers.CharField(source='department.name_ar', read_only=True)
+    department_en = serializers.CharField(source='department.name_en', read_only=True)
 
     class Meta:
         model = Document
@@ -43,8 +45,10 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class ListDocumentSerializer(serializers.ModelSerializer):
-    department_ar = serializers.CharField(source='department.name_ar')
-    department_en = serializers.CharField(source='department.name_en')
+    priority_ar = serializers.CharField(source='priority.name_ar', read_only=True)
+    priority_en = serializers.CharField(source='priority.name_en', read_only=True)
+    department_ar = serializers.CharField(source='department.name_ar', read_only=True)
+    department_en = serializers.CharField(source='department.name_en', read_only=True)
     
     class Meta:
         model = Document
@@ -53,6 +57,8 @@ class ListDocumentSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "priority",
+            "priority_ar",
+            "priority_en",
             "department_ar",
             "department_en",
             "status",
@@ -63,6 +69,8 @@ class ListDocumentSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "priority",
+            "priority_ar",
+            "priority_en",
             "department_ar",
             "department_en",
             "status",
@@ -73,13 +81,13 @@ class ListDocumentSerializer(serializers.ModelSerializer):
 class DocumentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["id", "title", "description", "priority", "file_type", "department", "comments"]
+        fields = ["id", "title", "description", "priority", "file_type", "comments"]
 
 
 class DocumentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["id", "status", "comments", "redirect_department", "reviewed_by"]
+        fields = ["id", "title", "description", "priority", "status", "comments", "redirect_department", "reviewed_by"]
         read_only_fields = ["reviewed_by"]
 
 

@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from lookups.models import Department
-from lookups.api.serializers import DepartmentSerializer
+from lookups.models import Department, Priority
+from lookups.api.serializers import DepartmentSerializer, PrioritySerializer
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
@@ -106,3 +106,28 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             'results': [],
             'message': f'Department with ID {instance_id} was successfully deleted'
         }, status=status.HTTP_200_OK)
+
+class PriorityViewSet(viewsets.ModelViewSet):
+    queryset = Priority.objects.all()
+    serializer_class = PrioritySerializer
+
+    def get_queryset(self):
+        return Priority.objects.filter(is_active=True)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        # If pagination is disabled, still return in standard format
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'count': queryset.count(),
+            'next': None,
+            'previous': None,
+            'results': serializer.data
+        })

@@ -19,3 +19,13 @@ class Priority(models.Model):
 
     def __str__(self):
         return self.name_ar
+
+
+class DefaultSignature(models.Model):
+    signature_data = models.TextField(blank=True, null=True, help_text='Base64 encoded signature')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.signature_data

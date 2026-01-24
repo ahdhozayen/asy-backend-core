@@ -12,4 +12,14 @@ urlpatterns = [
         views.DepartmentViewSet.as_view({"get": "retrieve"}),
         name="department-detail",
     ),
+    path(
+        "priorities",
+        views.PriorityViewSet.as_view({"get": "list"}),
+        name="priority-list",
+    ),
+    path(
+        "priorities/<int:pk>/",
+        views.PriorityViewSet.as_view({"get": "retrieve"}),
+        name="priority-detail",
+    ),
 ]

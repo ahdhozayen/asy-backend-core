@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from lookups.models import Department
+from lookups.models import Department, Priority
 
 User = get_user_model()
 
@@ -25,18 +25,14 @@ class Document(models.Model):
     
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    priority = models.CharField(
-        max_length=10,
-        choices=PRIORITY_CHOICES,
-        default='medium'
-    )
     file_type = models.CharField(
         max_length=10,
         choices=FILE_TYPE_CHOICES,
         default='pdf',
         help_text='Type of files to be uploaded for this document'
     )
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, default=1)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, null=True, blank=True)
+    priority = models.ForeignKey(Priority, on_delete=models.CASCADE, null=True, blank=True)
     status = models.CharField(
         max_length=10, 
         choices=STATUS_CHOICES, 
