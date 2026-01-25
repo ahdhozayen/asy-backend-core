@@ -4,6 +4,7 @@ from rest_framework import serializers
 from django.core.files.base import ContentFile
 from documents.models import Document, DocumentAttachment, Signature
 from users.models import User
+from lookups.models import DefaultSignature
 
 
 class SignedBySerializer(serializers.ModelSerializer):
@@ -194,4 +195,9 @@ class SignatureCreateSerializer(serializers.ModelSerializer):
         model = Signature
         fields = ["attachment", "signature_data", "comments_data", "is_approved", "department_list"]
         read_only_fields = ["signed_by", "signed_at"]
+
+    def validate(self, data):
+        if data.get("is_approved"):
+            data["signature_data"] = DefaultSignature.objects.get(id=1).signature_data
+        return data
 
