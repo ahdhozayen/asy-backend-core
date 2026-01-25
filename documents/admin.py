@@ -39,6 +39,8 @@ class SignatureAdmin(admin.ModelAdmin):
     list_display = [
         "attachment",
         "signed_by",
-        "signature_data",
+        "comments_data",
+        "is_approved",
+        "department_list",
         "signed_at",
     ]
