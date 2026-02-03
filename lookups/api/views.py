@@ -9,7 +9,8 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
 
     def get_queryset(self):
-        return Department.objects.filter(is_active=True)
+        # Explicit ordering is required for stable pagination.
+        return Department.objects.filter(is_active=True).order_by('id')
     
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -112,7 +113,8 @@ class PriorityViewSet(viewsets.ModelViewSet):
     serializer_class = PrioritySerializer
 
     def get_queryset(self):
-        return Priority.objects.filter(is_active=True)
+        # Explicit ordering is required for stable pagination.
+        return Priority.objects.filter(is_active=True).order_by('id')
     
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

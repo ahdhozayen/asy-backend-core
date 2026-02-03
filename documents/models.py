@@ -110,6 +110,7 @@ class Signature(models.Model):
     comments_data = models.TextField(blank=True, null=True, help_text='Base64 encoded comments')
     is_approved = models.BooleanField(default=False)
     department_list = models.JSONField(blank=True, null=True, help_text='List of departments that will receive the document')
+    department_data = models.TextField(blank=True, null=True, help_text='Department list HTML or Base64 encoded image')
     signed_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

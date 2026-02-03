@@ -31,7 +31,7 @@ class SignatureAgent:
     SIDE_BY_SIDE_MAX_WIDTH_RATIO = 0.5    # Combined elements max width is 50% of page
     
     # Department list styling
-    DEPARTMENT_FONT_SIZE = 20
+    DEPARTMENT_FONT_SIZE = 36
     DEPARTMENT_BULLET = '•'
     DEPARTMENT_COLOR = (255, 0, 0, 255)  # Red color with alpha
     DEPARTMENT_LINE_SPACING = 5
@@ -57,6 +57,7 @@ class SignatureAgent:
         self.signature_model = signature_model
         self.signature_image: Optional[Image.Image] = None
         self.comments_image: Optional[Image.Image] = None
+        self.department_image: Optional[Image.Image] = None
         self.document = signature_model.attachment.document
     
     # ==================== UTILITY METHODS ====================
@@ -225,6 +226,20 @@ class SignatureAgent:
         """Decode comments image from base64."""
         if hasattr(self.signature_model, 'comments_data'):
             self.comments_image = self._decode_base64_image(self.signature_model.comments_data)
+
+    def _decode_departments(self):
+        """Decode department list image from base64 (if provided)."""
+        if hasattr(self.signature_model, 'department_data'):
+            department_data = getattr(self.signature_model, 'department_data', None)
+            if not department_data or not isinstance(department_data, str):
+                self.department_image = None
+                return
+
+            # Only attempt image decode if it looks like a data URL / base64 blob
+            if 'base64,' in department_data:
+                self.department_image = self._decode_base64_image(department_data)
+            else:
+                self.department_image = None
     
     # ==================== DEPARTMENT LIST RENDERING ====================
     
@@ -456,7 +471,10 @@ class SignatureAgent:
         
         # Create department list image
         dept_max_width = int(page_width * self.DEPARTMENT_SCALE_FACTOR)
-        department_img = self._render_department_list(dept_max_width)
+        if self.department_image:
+            department_img = self._resize_to_width(self.department_image, dept_max_width)
+        else:
+            department_img = self._render_department_list(dept_max_width)
         
         # Build a single row: comments -> department list -> signature (signature on far right)
         row_img = None
@@ -635,10 +653,9 @@ class SignatureAgent:
             original_format = img.format
             original_mode = img.mode
             
-            if hasattr(img, '_getexif'):
-                exif = img._getexif()
-            else:
-                exif = None
+            # Image.save(exif=...) requires raw EXIF bytes, not getexif() dict/Exif object
+            exif_raw = img.info.get('exif')
+            exif = exif_raw if isinstance(exif_raw, bytes) else None
             
             # Process image
             processed_img = self._process_page_image(img)
@@ -656,7 +673,7 @@ class SignatureAgent:
             output = BytesIO()
             
             save_args = {'format': original_format or 'PNG'}
-            if exif and original_format in ['JPEG', 'TIFF']:
+            if exif and isinstance(exif, bytes) and original_format in ['JPEG', 'TIFF']:
                 save_args['exif'] = exif
             
             processed_img.save(output, **save_args)
@@ -677,9 +694,10 @@ class SignatureAgent:
         if not self.signature_model.attachment.file:
             raise ValueError("No document attachment found")
         
-        # Decode signature and comments
+        # Decode signature, comments, and departments
         self._decode_signature()
         self._decode_comments()
+        self._decode_departments()
         
         # Get the attachment
         attachment = self.signature_model.attachment

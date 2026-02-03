@@ -42,5 +42,6 @@ class SignatureAdmin(admin.ModelAdmin):
         "comments_data",
         "is_approved",
         "department_list",
+        "department_data",
         "signed_at",
     ]
